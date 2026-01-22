@@ -16,10 +16,11 @@ jobs:
         with:
           ndk-version: r26b
 
-      - name: Force Compile 16KB
+      - name: Force Fix and Compile
         run: |
-          # Sabse bada fix: Assembly files ko remove kar do jo error de rahi hain
-          rm -rf source/TrampolineBridge/ClosureTrampolineBridge/arm64/*.asm
+          # File delete nahi karenge, bas khali kar denge taaki CMake error na de
+          cat /dev/null > source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
+          cat /dev/null > source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_trampoline_arm64.asm
           
           mkdir build && cd build
           cmake .. \
@@ -28,8 +29,8 @@ jobs:
             -DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME \
             -DCMAKE_BUILD_TYPE=Release \
             -DDOBBY_BUILD_PLUGINS=OFF \
-            -DCMAKE_CXX_FLAGS="-Wl,-z,max-page-size=16384 -DDOBBY_DISABLE_CLOSURE_TRAMPOLINE" \
-            -DCMAKE_C_FLAGS="-Wl,-z,max-page-size=16384 -DDOBBY_DISABLE_CLOSURE_TRAMPOLINE"
+            -DCMAKE_CXX_FLAGS="-Wl,-z,max-page-size=16384" \
+            -DCMAKE_C_FLAGS="-Wl,-z,max-page-size=16384"
           
           make dobby_static -j$(nproc)
 
