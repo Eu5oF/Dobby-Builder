@@ -1,4 +1,4 @@
-name: Build Dobby (Force Fix Assembly)
+name: Build Dobby (Final Fix)
 
 on:
   workflow_dispatch:
@@ -15,21 +15,25 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Patch Dobby Assembly (Fix ADRP Error)
+      - name: Patch Dobby Assembly (Final Syntax Fix)
         run: |
-          echo "Patching assembly for Clang compatibility..."
-          # Fix ARM64 ADRP relocations for new NDK
+          echo "Patching assembly to match Modern Clang syntax..."
+          
+          # ARM64 Fix: Change @PAGE to nothing and @PAGEOFF to :lo12:
+          # This is the standard relocation format for modern compilers
           sed -i 's/@PAGE//g' source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
-          sed -i 's/@PAGEOFF//g' source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
-          # Fix ARM ADR relocations for 32-bit if needed
+          sed -i 's/@PAGEOFF/:lo12:/g' source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
+          
+          # ARM (32-bit) Fix: Sometimes needed for older syntax
           sed -i 's/@PAGE//g' source/TrampolineBridge/ClosureTrampolineBridge/arm/closure_bridge_arm.asm || true
-          sed -i 's/@PAGEOFF//g' source/TrampolineBridge/ClosureTrampolineBridge/arm/closure_bridge_arm.asm || true
+          sed -i 's/@PAGEOFF/:lo12:/g' source/TrampolineBridge/ClosureTrampolineBridge/arm/closure_bridge_arm.asm || true
 
-      - name: Setup NDK r25b
+      - name: Setup NDK r26b
         run: |
-          wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
-          unzip -q android-ndk-r25b-linux.zip
-          echo "ANDROID_NDK_HOME=$(pwd)/android-ndk-r25b" >> $GITHUB_ENV
+          # r26b provides a good balance for 16KB support and stability
+          wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
+          unzip -q android-ndk-r26b-linux.zip
+          echo "ANDROID_NDK_HOME=$(pwd)/android-ndk-r26b" >> $GITHUB_ENV
 
       - name: Build Arm64 (64-bit)
         run: |
@@ -39,7 +43,9 @@ jobs:
             -DANDROID_ABI="arm64-v8a" \
             -DANDROID_PLATFORM=android-24 \
             -DDOBBY_GENERATE_SHARED=OFF \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="-fPIC" \
+            -DCMAKE_CXX_FLAGS="-fPIC"
           cmake --build build_64
           cp build_64/libdobby.a output/arm64-v8a/
 
@@ -51,13 +57,14 @@ jobs:
             -DANDROID_ABI="armeabi-v7a" \
             -DANDROID_PLATFORM=android-24 \
             -DDOBBY_GENERATE_SHARED=OFF \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="-fPIC" \
+            -DCMAKE_CXX_FLAGS="-fPIC"
           cmake --build build_32
           cp build_32/libdobby.a output/armeabi-v7a/
 
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: Dobby-Fixed-Static
+          name: Dobby-Static-Fixed
           path: output/
-          
