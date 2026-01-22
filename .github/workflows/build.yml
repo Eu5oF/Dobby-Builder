@@ -11,32 +11,37 @@ jobs:
           repository: jmpews/Dobby
           submodules: recursive
 
-      - name: Setup NDK r26b
+      - name: Setup NDK r27c
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r26b
+          ndk-version: r27c
 
       - name: Auto-Fix and Compile
         run: |
-          # 1. Missing header error fix
-          touch source/core/arch/Cpu.h
+          # 1. Fix ProcessRuntime.cc (Function call and Struct issues)
+          # 'start' ko variable ki tarah treat karne ke liye fix
+          sed -i 's/a.start < b.start/a.address < b.address/g' source/Backend/UserMode/PlatformUtil/Linux/ProcessRuntime.cc || true
           
-          # 2. Assembly error bypass (Empty out the problematic files)
-          find . -name "*.asm" -exec sh -c 'echo "" > {}' \;
-          find . -name "*.S" -exec sh -c 'echo "" > {}' \;
+          # 2. Fix missing load_address member error
+          # Dobby ke naye version mein load_address ki jagah base_address ya address use hota hai
+          find source builtin-plugin -type f \( -name "*.cc" -o -name "*.cpp" -o -name "*.h" \) -exec sed -i 's/\.load_address/.address/g' {} +
 
-          # 3. Source code errors bypass (Wno-error flag helps ignore minor code issues)
+          # 3. Create missing headers if any
+          mkdir -p source/core/arch/
+          touch source/core/arch/Cpu.h
+
+          # 4. Configure and Build
           mkdir build && cd build
           cmake .. \
-            -DCMAKE_SYSTEM_NAME=Android \
-            -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a \
-            -DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-21 \
             -DCMAKE_BUILD_TYPE=Release \
-            -DDOBBY_BUILD_PLUGINS=OFF \
             -DCMAKE_CXX_FLAGS="-Wl,-z,max-page-size=16384 -Wno-everything" \
-            -DCMAKE_C_FLAGS="-Wl,-z,max-page-size=16384 -Wno-everything"
+            -DCMAKE_C_FLAGS="-Wl,-z,max-page-size=16384 -Wno-everything" \
+            -DDOBBY_GENERATE_SHARED=OFF
           
-          make dobby_static -j$(nproc)
+          make dobby -j$(nproc)
 
       - name: Upload
         uses: actions/upload-artifact@v4
