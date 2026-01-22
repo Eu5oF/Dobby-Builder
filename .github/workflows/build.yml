@@ -1,4 +1,4 @@
-name: Build Dobby (Static 16KB Support)
+name: Build Dobby (Fixed NDK)
 
 on:
   workflow_dispatch:
@@ -15,16 +15,17 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Setup Android NDK (r27)
-        uses: android-actions/setup-ndk@v3
-        with:
-          ndk-version: r27
-
+      - name: Download & Install NDK r27c (Manual)
+        run: |
+          echo "Downloading NDK r27c..."
+          wget -q https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+          unzip -q android-ndk-r27c-linux.zip
+          
+          # Set Environment Variable for steps below
+          echo "ANDROID_NDK_HOME=$(pwd)/android-ndk-r27c" >> $GITHUB_ENV
+          
       - name: Build Dobby (Arm64 & Armv7)
         run: |
-          # Define NDK Path
-          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973
-          
           # Create output directories
           mkdir -p output/arm64-v8a
           mkdir -p output/armeabi-v7a
@@ -62,10 +63,6 @@ jobs:
             
           cmake --build build_32 --config Release
           cp build_32/libdobby.a output/armeabi-v7a/libdobby.a
-
-      - name: Verify Files
-        run: |
-          ls -R output/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
