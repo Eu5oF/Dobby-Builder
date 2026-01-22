@@ -5,11 +5,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Dobby (Stable)
+      - name: Checkout Source
         uses: actions/checkout@v4
         with:
           repository: jmpews/Dobby
-          ref: v1.2.6
           submodules: recursive
 
       - name: Setup Android NDK r25c
@@ -28,7 +27,8 @@ jobs:
             -DDOBBY_BUILD_PLUGINS=OFF \
             -DCMAKE_CXX_FLAGS="-Wl,-z,max-page-size=16384" \
             -DCMAKE_C_FLAGS="-Wl,-z,max-page-size=16384"
-          make -j$(nproc)
+          # Sirf static library build karenge taaki error wali files skip ho jayein
+          make dobby_static -j$(nproc)
 
       - name: Upload
         uses: actions/upload-artifact@v4
