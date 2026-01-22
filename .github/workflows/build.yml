@@ -11,32 +11,39 @@ jobs:
           repository: jmpews/Dobby
           submodules: recursive
 
-      - name: Setup NDK r27c
+      - name: Setup NDK r26b
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r26b
 
-      - name: Auto-Fix and Compile
+      - name: Auto-Fix Source and Assembly
         run: |
-          # 1. Fix ProcessRuntime.cc (Function call and Struct issues)
-          # 'start' ko variable ki tarah treat karne ke liye fix
+          # 1. Fix ProcessRuntime.cc (Non-static member function error)
+          # 'start' ko variable ki tarah call karne ke liye fix
           sed -i 's/a.start < b.start/a.address < b.address/g' source/Backend/UserMode/PlatformUtil/Linux/ProcessRuntime.cc || true
-          
-          # 2. Fix missing load_address member error
-          # Dobby ke naye version mein load_address ki jagah base_address ya address use hota hai
-          find source builtin-plugin -type f \( -name "*.cc" -o -name "*.cpp" -o -name "*.h" \) -exec sed -i 's/\.load_address/.address/g' {} +
 
-          # 3. Create missing headers if any
+          # 2. Fix missing load_address member error
+          # Saari files mein .load_address ko .address se replace karein (latest Dobby standard)
+          find . -type f \( -name "*.cc" -o -name "*.cpp" -o -name "*.h" \) -exec sed -i 's/\.load_address/.address/g' {} +
+
+          # 3. FIX ASSEMBLY ERROR (ADRP Relocation Fix)
+          # @PAGE ko :pg_hi21: aur @PAGEOFF ko :lo12: se replace karein jo Clang pasand karta hai
+          find source -name "*.asm" -exec sed -i 's/@PAGE/:pg_hi21:/g' {} +
+          find source -name "*.asm" -exec sed -i 's/@PAGEOFF/:lo12:/g' {} +
+
+          # 4. Create missing Cpu.h header
           mkdir -p source/core/arch/
           touch source/core/arch/Cpu.h
 
-          # 4. Configure and Build
+      - name: Compile
+        run: |
           mkdir build && cd build
           cmake .. \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-21 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DDOBBY_BUILD_PLUGINS=ON \
             -DCMAKE_CXX_FLAGS="-Wl,-z,max-page-size=16384 -Wno-everything" \
             -DCMAKE_C_FLAGS="-Wl,-z,max-page-size=16384 -Wno-everything" \
             -DDOBBY_GENERATE_SHARED=OFF
