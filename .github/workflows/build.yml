@@ -1,4 +1,4 @@
-name: Build Dobby (Stable r25b)
+name: Build Dobby (Force Fix Assembly)
 
 on:
   workflow_dispatch:
@@ -15,60 +15,49 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Download & Install NDK r25b (Stable for Dobby)
+      - name: Patch Dobby Assembly (Fix ADRP Error)
         run: |
-          echo "Downloading NDK r25b..."
-          # Dobby compiles best with r25b. Newer NDKs break assembly code.
+          echo "Patching assembly for Clang compatibility..."
+          # Fix ARM64 ADRP relocations for new NDK
+          sed -i 's/@PAGE//g' source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
+          sed -i 's/@PAGEOFF//g' source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
+          # Fix ARM ADR relocations for 32-bit if needed
+          sed -i 's/@PAGE//g' source/TrampolineBridge/ClosureTrampolineBridge/arm/closure_bridge_arm.asm || true
+          sed -i 's/@PAGEOFF//g' source/TrampolineBridge/ClosureTrampolineBridge/arm/closure_bridge_arm.asm || true
+
+      - name: Setup NDK r25b
+        run: |
           wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
           unzip -q android-ndk-r25b-linux.zip
-          
-          # Set Environment Variable
           echo "ANDROID_NDK_HOME=$(pwd)/android-ndk-r25b" >> $GITHUB_ENV
 
-      - name: Build Dobby (Arm64 & Armv7)
+      - name: Build Arm64 (64-bit)
         run: |
-          # Output directories create karo
           mkdir -p output/arm64-v8a
-          mkdir -p output/armeabi-v7a
-
-          echo "--------------------------------------"
-          echo "Building for ARM64-v8a (64-bit)"
-          echo "--------------------------------------"
-          
-          # 64-bit Build
           cmake -H. -Bbuild_64 \
-            -DANDROID_NDK=$ANDROID_NDK_HOME \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI="arm64-v8a" \
             -DANDROID_PLATFORM=android-24 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DDOBBY_GENERATE_SHARED=OFF
-            
-          cmake --build build_64 --config Release
-          cp build_64/libdobby.a output/arm64-v8a/libdobby.a
+            -DDOBBY_GENERATE_SHARED=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_64
+          cp build_64/libdobby.a output/arm64-v8a/
 
-          echo "--------------------------------------"
-          echo "Building for ARMEABI-v7a (32-bit)"
-          echo "--------------------------------------"
-          
-          # 32-bit Build
+      - name: Build Armv7 (32-bit)
+        run: |
+          mkdir -p output/armeabi-v7a
           cmake -H. -Bbuild_32 \
-            -DANDROID_NDK=$ANDROID_NDK_HOME \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI="armeabi-v7a" \
             -DANDROID_PLATFORM=android-24 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DDOBBY_GENERATE_SHARED=OFF
-            
-          cmake --build build_32 --config Release
-          cp build_32/libdobby.a output/armeabi-v7a/libdobby.a
+            -DDOBBY_GENERATE_SHARED=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_32
+          cp build_32/libdobby.a output/armeabi-v7a/
 
-      - name: Verify Files
-        run: ls -R output/
-
-      - name: Upload Artifacts
+      - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: Dobby-Static-Libs
+          name: Dobby-Fixed-Static
           path: output/
           
